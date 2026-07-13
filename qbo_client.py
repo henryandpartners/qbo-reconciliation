@@ -28,12 +28,13 @@ class QBOClient:
 
     def _query(self, sql: str) -> dict:
         """Execute a QBO query."""
+        token = self.access_token.strip()
         with httpx.Client() as client:
             resp = client.get(
                 f"{self.base}/query",
                 params={"query": sql},
                 headers={
-                    "Authorization": f"Bearer {self.access_token}",
+                    "Authorization": f"Bearer {token}",
                     "Accept": "application/json",
                 },
                 timeout=30,
@@ -47,12 +48,13 @@ class QBOClient:
 
     def _get_report(self, report_name: str, params: dict = None) -> dict:
         url = f"{self.base}/reports/{report_name}"
+        token = self.access_token.strip()
         with httpx.Client() as client:
             resp = client.get(
                 url,
                 params=params or {},
                 headers={
-                    "Authorization": f"Bearer {self.access_token}",
+                    "Authorization": f"Bearer {token}",
                     "Accept": "application/json",
                 },
                 timeout=30,

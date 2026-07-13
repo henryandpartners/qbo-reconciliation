@@ -215,6 +215,11 @@ async def dashboard(
         refresh_token = _tokens[session].get("refresh", "")
         company_id = _token_company.get(session, company_id)
 
+    # Sanitize inputs — strip whitespace and control chars from tokens
+    access_token = access_token.strip()
+    refresh_token = refresh_token.strip()
+    company_id = company_id.strip()
+
     if not company_id or not access_token:
         return HTMLResponse(TOKEN_PAGE)
 
