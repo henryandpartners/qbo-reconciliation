@@ -1,0 +1,9 @@
+{
+  "name": "qbo-oauth-callback",
+  "version": "1.0.0",
+  "description": "QuickBooks OAuth callback + reconciliation app",
+  "scripts": {
+    "dev": "python main.py",
+    "start": "uvicorn main:app --host 0.0.0.0 --port $PORT"
+  }
+}
