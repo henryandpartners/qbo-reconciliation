@@ -164,11 +164,7 @@ async def auth_callback(code: str = "", state: str = "", realm_id: str = "", err
     refresh_token = data.get("refresh_token", "")
     company_id = realm_id or data.get("realmId", "")
 
-    # Store tokens in memory for dashboard redirect
-    session_id = os.urandom(8).hex()
-    _tokens[session_id] = {"access": access_token, "refresh": refresh_token}
-    _token_company[session_id] = company_id
-
+    # Show tokens on success page — user copies them
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -179,22 +175,35 @@ async def auth_callback(code: str = "", state: str = "", realm_id: str = "", err
     .card {{ background:#1e293b; border-radius:16px; padding:40px; max-width:560px; border:1px solid #334155; }}
     h1 {{ color:#22c55e; font-size:24px; margin-bottom:8px; }}
     .label {{ font-weight:600; margin-top:16px; margin-bottom:4px; font-size:13px; color:#94a3b8; }}
-    .tok {{ background:#0f172a; padding:10px 12px; border-radius:8px; font-family:monospace; font-size:11px; word-break:break-all; margin:4px 0; color:#94a3b8; }}
+    .tok {{ background:#0f172a; padding:10px 12px; border-radius:8px; font-family:monospace; font-size:11px; word-break:break-all; margin:4px 0; color:#94a3b8; border:1px solid #334155; }}
     .btn {{ display:inline-block; background:#2ca01c; color:white; padding:14px 28px; border-radius:10px; text-decoration:none; font-weight:600; margin-top:20px; }}
+    .copy-btn {{ background:#334155; color:#e2e8f0; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; margin-left:8px; }}
+    .info {{ background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 16px; margin-top: 16px; }}
+    .info p {{ color:#94a3b8; font-size: 13px; margin: 4px 0; }}
 </style>
 </head>
 <body>
 <div class="card">
-    <h1>✅ Connected!</h1>
-    <p style="color:#94a3b8;">QuickBooks Online — Company ID: <strong>{company_id}</strong></p>
-    <div class="label">Access Token</div>
-    <div class="tok">{access_token[:80]}...</div>
-    <div class="label">Refresh Token</div>
-    <div class="tok">{refresh_token[:80]}...</div>
-    <div style="margin-top:20px;display:flex;gap:12px;">
-        <a class="btn" href="/dashboard?session={session_id}">📊 View Dashboard</a>
+    <h1>✅ Connected to QuickBooks!</h1>
+    <p style="color:#94a3b8;margin-top:4px;">Company ID: <strong style="color:#e2e8f0;">{company_id}</strong></p>
+
+    <div class="info">
+        <p><strong style="color:#e2e8f0;">📋 Copy these tokens</strong> and send them to Hermes to load your dashboard.</p>
     </div>
-    <p style="margin-top:16px;font-size:12px;color:#64748b;">Or share the tokens above with Hermes. They're stored temporarily in this browser session.</p>
+
+    <div class="label">Access Token</div>
+    <div class="tok">{access_token}</div>
+
+    <div class="label">Refresh Token</div>
+    <div class="tok">{refresh_token}</div>
+
+    <div class="label">Company ID</div>
+    <div class="tok">{company_id}</div>
+
+    <div style="margin-top:20px;">
+        <a class="btn" href="/dashboard?company_id={company_id}&access_token={access_token}&refresh_token={refresh_token}">📊 Load Dashboard Now</a>
+        <p style="margin-top:10px;font-size:12px;color:#64748b;">This loads the dashboard in this browser tab. Or copy the tokens and paste them at the <a href="/token-auth" style="color:#2ca01c;">token page</a> later.</p>
+    </div>
 </div>
 </body>
 </html>""")
@@ -209,12 +218,6 @@ async def dashboard(
     refresh_token: str = "",
     session: str = "",
 ):
-    # If session param provided, use stored tokens
-    if session and session in _tokens:
-        access_token = _tokens[session].get("access", "")
-        refresh_token = _tokens[session].get("refresh", "")
-        company_id = _token_company.get(session, company_id)
-
     # Sanitize inputs — strip whitespace and control chars from tokens
     access_token = access_token.strip()
     refresh_token = refresh_token.strip()
