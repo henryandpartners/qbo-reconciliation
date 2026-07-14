@@ -26,8 +26,25 @@ class QBOClient:
         base = QB_SANDBOX if sandbox else QB_BASE
         self.base = f"{base}/{company_id}"
 
+    def _auto_refresh(self):
+        """Automatically refresh the access token if refresh credentials are available."""
+        if not self.refresh_token or not self.client_id or not self.client_secret:
+            return
+        with httpx.Client() as client:
+            resp = client.post(
+                TOKEN_URL,
+                data={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
+                auth=(self.client_id, self.client_secret),
+                timeout=30,
+            )
+        data = resp.json()
+        if resp.status_code == 200:
+            self.access_token = data.get("access_token", self.access_token)
+            if "refresh_token" in data:
+                self.refresh_token = data["refresh_token"]
+
     def _query(self, sql: str) -> dict:
-        """Execute a QBO query."""
+        """Execute a QBO query with automatic token refresh on 401."""
         token = self.access_token.strip()
         with httpx.Client() as client:
             resp = client.get(
@@ -39,14 +56,27 @@ class QBOClient:
                 },
                 timeout=30,
             )
+        # If token expired, try refreshing and retry once
         if resp.status_code == 401 and self.refresh_token and self.client_id:
-            raise PermissionError("Token expired — needs refresh")
+            self._auto_refresh()
+            token = self.access_token.strip()
+            with httpx.Client() as client:
+                resp = client.get(
+                    f"{self.base}/query",
+                    params={"query": sql},
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json",
+                    },
+                    timeout=30,
+                )
         if resp.status_code != 200:
             fault = resp.json().get("fault", {})
             return {"error": fault, "status": resp.status_code}
         return resp.json()
 
     def _get_report(self, report_name: str, params: dict = None) -> dict:
+        """Fetch a QBO report with automatic token refresh on 401."""
         url = f"{self.base}/reports/{report_name}"
         token = self.access_token.strip()
         with httpx.Client() as client:
@@ -59,6 +89,20 @@ class QBOClient:
                 },
                 timeout=30,
             )
+        # If token expired, try refreshing and retry once
+        if resp.status_code == 401 and self.refresh_token and self.client_id:
+            self._auto_refresh()
+            token = self.access_token.strip()
+            with httpx.Client() as client:
+                resp = client.get(
+                    url,
+                    params=params or {},
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json",
+                    },
+                    timeout=30,
+                )
         if resp.status_code != 200:
             return {"error": resp.json().get("fault", {}), "status": resp.status_code}
         return resp.json()

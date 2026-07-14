@@ -242,11 +242,21 @@ async def dashboard(
     if result.get("error"):
         return render_error(str(result["error"]))
 
-    # Check if coa failed (likely token issue)
+    # Check if coa failed — try one more time with fresh token
     coa_data = result["data"].get("coa", {})
     if isinstance(coa_data, dict) and "error" in coa_data:
-        err_detail = coa_data["error"]
-        if "401" in str(err_detail) or "AuthenticationFailed" in str(err_detail):
+        err_detail = str(coa_data["error"])
+        # Try refreshing token and retrying once
+        try:
+            client._auto_refresh()
+            result = analyze_qbo_data(client)
+            coa_data = result["data"].get("coa", {})
+            if isinstance(coa_data, dict) and "error" not in coa_data:
+                return render_dashboard(result["data"])
+        except Exception:
+            pass
+        # Still failed — show link to reconnect
+        if "401" in err_detail or "AuthenticationFailed" in err_detail or "expired" in err_detail.lower():
             return render_error(
                 "Authentication failed. Your token may be expired. "
                 "<a href='/auth/login' style='color:#2ca01c;'>Reconnect via OAuth</a> "
