@@ -236,48 +236,71 @@ async def api_refresh_token(refresh_token: str = ""):
 @app.get("/api/debug")
 async def api_debug(company_id: str = "", access_token: str = "", refresh_token: str = ""):
     """Debug endpoint: return raw JSON from a few QBO API calls so we can see what's happening."""
-    import httpx as hx
+    from qbo_client import QBOClient
+
+    client = QBOClient(
+        company_id=company_id.strip(),
+        access_token=access_token.strip(),
+        refresh_token=refresh_token.strip() if refresh_token else "",
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+    )
+
     results = {}
-    base = f"https://quickbooks.api.intuit.com/v3/company/{company_id}" if company_id else ""
-    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"} if access_token else {}
 
-    if not company_id or not access_token:
-        return {"error": "Missing company_id or access_token"}
-
-    # CompanyInfo — shows if it's sandbox or real, company name
+    # CompanyInfo
     try:
-        r = await hx.AsyncClient().get(f"{base}/companyinfo/{company_id}", headers=headers, timeout=15)
-        results["company_info"] = {"status": r.status_code, "data": r.json()}
+        results["company_info"] = client.get_company_info()
     except Exception as e:
         results["company_info"] = {"error": str(e)}
 
-    # P&L report
+    # P&L
     try:
-        r = await hx.AsyncClient().get(f"{base}/reports/ProfitAndLoss", headers=headers, params={"date_macro": "This Fiscal Year"}, timeout=15)
-        results["profit_and_loss"] = {"status": r.status_code, "data": r.json()}
+        results["profit_and_loss"] = client.get_profit_and_loss()
     except Exception as e:
         results["profit_and_loss"] = {"error": str(e)}
 
-    # Account query — see actual accounts and their balances
+    # Accounts
     try:
-        r = await hx.AsyncClient().get(f"{base}/query", headers=headers, params={"query": "select * from Account maxresults 200"}, timeout=15)
-        results["accounts"] = {"status": r.status_code, "data": r.json()}
+        data = client.get_chart_of_accounts()
+        results["accounts"] = {"total": len(data), "accounts": data}
     except Exception as e:
         results["accounts"] = {"error": str(e)}
 
-    # Invoice query
+    # Invoices
     try:
-        r = await hx.AsyncClient().get(f"{base}/query", headers=headers, params={"query": "select * from Invoice where TxnDate >= '2025-01-01' maxresults 200"}, timeout=15)
-        results["invoices"] = {"status": r.status_code, "data": r.json()}
+        data = client.get_invoices(400)
+        results["invoices"] = {"total": len(data), "invoices": data}
     except Exception as e:
         results["invoices"] = {"error": str(e)}
 
-    # Customer query
+    # Customers
     try:
-        r = await hx.AsyncClient().get(f"{base}/query", headers=headers, params={"query": "select * from Customer maxresults 200"}, timeout=15)
-        results["customers"] = {"status": r.status_code, "data": r.json()}
+        data = client.get_customers()
+        results["customers"] = {"total": len(data), "customers": data}
     except Exception as e:
         results["customers"] = {"error": str(e)}
+
+    # Items
+    try:
+        data = client.get_items()
+        results["items"] = {"total": len(data), "items": data}
+    except Exception as e:
+        results["items"] = {"error": str(e)}
+
+    # Vendors
+    try:
+        data = client.get_vendors()
+        results["vendors"] = {"total": len(data), "vendors": data}
+    except Exception as e:
+        results["vendors"] = {"error": str(e)}
+
+    # Bills
+    try:
+        data = client.get_bills(400)
+        results["bills"] = {"total": len(data), "bills": data}
+    except Exception as e:
+        results["bills"] = {"error": str(e)}
 
     return results
 
