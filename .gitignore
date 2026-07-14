@@ -6,3 +6,6 @@ data/
 output/
 .vercel
 .env*
+output/
+data/
+.env.local
