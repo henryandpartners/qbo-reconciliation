@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 import httpx
 import os
 import json
+import urllib.parse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -134,11 +135,11 @@ async def auth_login():
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
-        "scope": "com.intuit.quickbooks.accounting openid profile email",
+        "scope": "com.intuit.quickbooks.accounting",
         "redirect_uri": REDIRECT_URI,
         "state": os.urandom(16).hex(),
     }
-    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    qs = "&".join(f"{urllib.parse.quote(str(k))}={urllib.parse.quote(str(v))}" for k, v in params.items())
     return RedirectResponse(url=f"{QB_OAUTH_URL}?{qs}")
 
 
