@@ -64,18 +64,47 @@ def detect_csv_type(filename):
 
 
 def parse_csv(filepath):
-    """Parse a CSV file and return list of dicts."""
+    """Parse a CSV file and return list of dicts.
+    Handles SaasAnt/Transaction Pro format (SVP metadata rows + blank line + real headers)."""
     rows = []
     try:
         with open(filepath, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Clean keys and values
-                cleaned = {}
-                for k, v in row.items():
+            lines = f.readlines()
+        
+        # SaasAnt format: skip SVP metadata rows (lines 0-2), find real header
+        # Pattern: [SVP row] [Title row] [Date row OR blank] [blank] [Real headers]
+        header_idx = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip().strip('"').strip()
+            # Skip SVP rows, title rows, date rows, blank lines
+            if not stripped:
+                continue
+            if stripped.startswith("SVP"):
+                continue
+            if stripped in lines[1].strip().strip('"').strip() if len(lines) > 1 else "":
+                continue  # Skip the title row
+            # Try to detect if this is a blank/title row by checking if it has a date pattern
+            if any(m in stripped.lower() for m in ["january", "february", "march", "april", "may", "june", 
+                                                     "july", "august", "september", "october", "november", "december",
+                                                     "all dates", "this month", "this quarter", "this year"]):
+                continue
+            # Candidate for real header
+            if line.count(',') >= 2 or '"' in line:
+                header_idx = i
+                break
+            header_idx = i
+        
+        # Parse from the detected header line
+        content = "".join(lines[header_idx:])
+        reader = csv.DictReader(content.splitlines())
+        for row in reader:
+            cleaned = {}
+            for k, v in row.items():
+                if k and k.strip():
                     key = k.strip().strip("\ufeff").strip()
                     val = v.strip() if v else ""
                     cleaned[key] = val
+            if cleaned and any(v for v in cleaned.values()):  # Only add rows with at least one value
                 rows.append(cleaned)
     except Exception as e:
         print(f"  ❌ Error parsing {filepath}: {e}")
