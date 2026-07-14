@@ -211,6 +211,122 @@ async def auth_callback(code: str = "", state: str = "", realm_id: str = "", err
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+@app.get("/api/refresh-token")
+async def api_refresh_token(refresh_token: str = ""):
+    """Proxy endpoint: refresh an expired access token using stored Client ID/Secret."""
+    if not refresh_token or not CLIENT_ID or not CLIENT_SECRET:
+        return {"error": "Missing refresh_token or server credentials not configured"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            QB_TOKEN_URL,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token.strip()},
+            auth=(CLIENT_ID, CLIENT_SECRET),
+            timeout=30,
+        )
+    data = resp.json()
+    return {
+        "status": resp.status_code,
+        "access_token": data.get("access_token", ""),
+        "refresh_token": data.get("refresh_token", data.get("refresh_token", refresh_token)),
+        "expires_in": data.get("x_refresh_token_expires_in", 0),
+    }
+
+
+@app.get("/api/pull-data")
+async def api_pull_data(company_id: str = "", access_token: str = "", refresh_token: str = ""):
+    """Pull all QBO data (CompanyInfo, Accounts, Invoices, Items, Customers, Vendors, Bills, P&L, BalanceSheet)."""
+    if not company_id or not access_token:
+        return {"error": "Missing company_id or access_token"}
+
+    from qbo_client import QBOClient, analyze_qbo_data
+
+    client = QBOClient(
+        company_id=company_id.strip(),
+        access_token=access_token.strip(),
+        refresh_token=refresh_token.strip(),
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+    )
+
+    results = {}
+
+    # Company Info
+    try:
+        results["company_info"] = client.get_company_info()
+    except Exception as e:
+        results["company_info"] = {"error": str(e)}
+
+    # Chart of Accounts
+    try:
+        data = client.get_chart_of_accounts()
+        results["chart_of_accounts"] = {"total": len(data), "accounts": data}
+    except Exception as e:
+        results["chart_of_accounts"] = {"error": str(e)}
+
+    # Customers
+    try:
+        data = client.get_customers()
+        results["customers"] = {"total": len(data), "customers": data}
+    except Exception as e:
+        results["customers"] = {"error": str(e)}
+
+    # Vendors
+    try:
+        data = client.get_vendors()
+        results["vendors"] = {"total": len(data), "vendors": data}
+    except Exception as e:
+        results["vendors"] = {"error": str(e)}
+
+    # Items
+    try:
+        data = client.get_items()
+        results["items"] = {"total": len(data), "items": data}
+    except Exception as e:
+        results["items"] = {"error": str(e)}
+
+    # Invoices
+    try:
+        data = client.get_invoices(400)
+        results["invoices"] = {"total": len(data), "invoices": data}
+    except Exception as e:
+        results["invoices"] = {"error": str(e)}
+
+    # Bills
+    try:
+        data = client.get_bills(400)
+        results["bills"] = {"total": len(data), "bills": data}
+    except Exception as e:
+        results["bills"] = {"error": str(e)}
+
+    # Purchases
+    try:
+        data = client.get_purchases(400)
+        results["purchases"] = {"total": len(data), "purchases": data}
+    except Exception as e:
+        results["purchases"] = {"error": str(e)}
+
+    # P&L Report
+    try:
+        results["profit_and_loss"] = client.get_profit_and_loss()
+    except Exception as e:
+        results["profit_and_loss"] = {"error": str(e)}
+
+    # Balance Sheet
+    try:
+        results["balance_sheet"] = client.get_balance_sheet()
+    except Exception as e:
+        results["balance_sheet"] = {"error": str(e)}
+
+    # Estimates
+    try:
+        data = client.get_estimates(400)
+        results["estimates"] = {"total": len(data), "estimates": data}
+    except Exception as e:
+        results["estimates"] = {"error": str(e)}
+
+    return results
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
     company_id: str = "",
